@@ -1,0 +1,410 @@
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width">
+	<script src="http://code.jquery.com/jquery-latest.js"></script>
+	<script type="text/javascript" src="ajax.js"></script>
+  <title>
+   Image Distortion
+  </title>
+</head>
+
+<body style="margin:0px;" onmouseup="mouseIsDown=false;radiusMD=false;amountMD=false;">
+  <table align="center" cellspacing="0px" cellpadding="0px" id="outerTable"><tr><td id="gAdTd" style="padding-right:3px;">
+
+  </td><td>
+  <table cellspacing="2px" id="tbl" style="background-color:#FFFFFF;height:100%;">
+    <tr>
+      <td id="tbltd" valign="top">
+        <canvas width="600px" height="450px" id="imgCanvas" style="border:1px solid black;cursor:default;" onmousedown="if(event.button==0) canvasMouseDown(event);" onmouseup="canvasMouseUp();">
+          This image distorter only works with Canvas-enabled web browsers such as <a href="http://google.com/chrome">Chrome</a> and <a href="http://firefox.com">Firefox</a>. Sorry!
+        </canvas><br>
+      </td>
+      <td valign="top" id="slidertd">
+        <table height="100%">
+          <tr>
+            <td valign="top">
+              
+              Type of distortion<br>
+              <input type="radio" name="distortionType" id="grow" checked="true">Grow<br>
+              <input type="radio" name="distortionType" id="shrink">Shrink<br>
+              <input type="radio" name="distortionType" id="cw">Swirl CW<br>
+              <input type="radio" name="distortionType" id="ccw">Swirl CCW<br>
+              <input type="radio" name="distortionType" id="smear">Smear<br>
+			  
+			 <input type="submit" name="submit" value="Save Image" id="uploadbtn" />
+			 <div id="debugFilenameConsole">Wait for a while..</div>
+            </td>
+          </tr>
+          <tr>
+            <td valign="bottom">
+             
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  
+  </table>
+  </td></tr></table>
+  
+  <div id="debug">
+  </div>
+  
+  <script type="text/javascript">
+    var imgCanvas = $('imgCanvas');
+    var imgCtx=imgCanvas.getContext('2d');
+    var mouseIsDown=false;
+    var mx=0;
+    var my=0;
+    var lx=0;
+    var ly=0;
+    var radius=0;
+    var amount=0;
+    var w=400;
+    var h=400;
+    
+    var distLeft=0;
+    var distUp=0;
+    var width=0;
+    var height=0;
+    
+    var radiusMD=false;
+    var amountMD=false;
+    
+    var edited=false;
+    var img;
+  
+    //var status=$('status');
+    imgCanvas.width=w;
+    imgCanvas.height=h;
+    imgCanvas.onmousemove=function(event){lx=mx;ly=my;updateMousePos(event);}
+    
+    Math.random()<0.5? loadImage('images/angelababy.jpg') : loadImage('images/angelababy.jpg');
+	
+	jQuery(document).ready(function(){
+		jQuery('#imgCanvas').on("vmousedown", function(event){	
+			if(event.button==0) canvasMouseDown(event);
+		});
+		
+		jQuery('#imgCanvas').on("vmouseup", function(event){	
+			canvasMouseUp();
+		});
+		
+		jQuery('#uploadbtn').on('click', saveViaAJAX);
+		
+		function saveViaAJAX(){
+			var testCanvas = document.getElementById("imgCanvas");
+			var canvasData = testCanvas.toDataURL("image/png");
+			var postData = "canvasData="+canvasData;
+			
+			//alert("canvasData ="+canvasData );
+			var ajax = new XMLHttpRequest();
+			ajax.open("POST",'testsave.php',true);
+			ajax.setRequestHeader('Content-Type', 'canvas/upload');
+
+			ajax.onreadystatechange=function(){
+				if (ajax.readyState == 4){	
+					//alert(ajax.responseText);
+					jQuery("#debugFilenameConsole").html("Saved as<br><a target='_blank' href='"+ajax.responseText+"'>"+ajax.responseText+"</a>");
+				}
+			}
+
+			ajax.send(postData);
+		}
+	})
+	
+    function imageUploaded()
+    {
+      var theTd=document.createElement('td');
+      var theImg=document.createElement('img');
+      var name=$('uploadTarget').contentDocument.body.innerHTML;
+      
+      $('uploadButton').disabled="";
+      $('uploadButton').value="Upload";
+      
+      document.body.focus();
+      
+      if(name!="")
+      {
+        theImg.style.height="80px";
+        theImg.src=name;
+        theImg.onclick=function()
+        {
+          loadImage(this.src);
+        }
+        theImg.style.border="1px solid black";
+        theImg.style.cursor="pointer";
+        
+        theTd.appendChild(theImg);
+        $('galleryTr').insertBefore(theTd,$('galleryTr').childNodes[0]);
+      }
+    }
+    
+    function downloadImage()
+    {
+      edited=false;
+      window.open(imgCanvas.toDataURL());
+    }
+    
+    function moveSlider(evt,id,doit)
+    {
+      if(doit)
+      {
+        var x=evt.clientX-$('slidertd').offsetLeft-$('gAdTd').offsetWidth-$('tbl').offsetLeft-$('outerTable').offsetLeft-10-2;
+        if(x<0) x=0;
+        if(x>183) x=183;
+        $(id).style.left=x;
+      }
+    }
+    
+    function canvasMouseDown(evt)
+    {
+      mouseIsDown=true;
+      updateMousePos(evt);
+      lx=mx;
+      ly=my;
+      distort();
+    }
+    
+    function updateMousePos(evt)
+    {
+      mx=evt.clientX-$('outerTable').offsetLeft-$('gAdTd').offsetWidth-$('tbl').offsetLeft-$('tbltd').offsetLeft-2;
+      my=evt.clientY-$('outerTable').offsetTop-$('tbl').offsetTop-$('tbltd').offsetTop-2;
+    }
+    
+    function canvasMouseUp()
+    {
+      mouseIsDown=false;
+    }
+    
+    function distort()
+    {
+      if(mouseIsDown)
+      {
+        radius=80//Math.round(parseInt($('radius').style.left)/184*205+20); //from 20 to 225.
+        amount=50//Math.round(parseInt($('amount').style.left)/184*10+90); //from 90 to 100.
+        
+        if($('shrink').checked || $('ccw').checked) amount=-amount;
+      
+        if(radius>100) imgCanvas.style.cursor="wait";
+        setTimeout('realDistort(1);',0);
+      }
+    }
+    
+    function realDistort(force)
+    {
+      if(mouseIsDown || force==1)
+      {
+        var mmx=mx; //my mx - mx at time of distortion click
+        var mmy=my;
+        var mlx=lx;
+        var mly=ly;
+      
+        edited=true;
+
+        mmx>radius? distLeft=radius : distLeft=mmx;
+        mmx<w-radius? width=radius*2+1 : width=w-mmx+radius;
+        
+        mmy>radius? distUp=radius : distUp=mmy;
+        mmy<h-radius? height=radius*2+1 : height=h-mmy+radius;
+        
+        var curImageData=imgCtx.getImageData(mmx-distLeft,mmy-distUp,width,height);
+        var newImageData=imgCtx.createImageData(width,height);
+      
+        for(var x=-distLeft;x<width-distLeft;x++)
+        {
+          for(var y=-distUp;y<height-distUp;y++)
+          {
+            //this is where the transformation takes place.
+            var dist=Math.sqrt(x*x + y*y); //this is the distance of the current pixel from the click point.
+            var angle=Math.atan(y/x);
+            if(isNaN(angle)) angle=0;
+            
+            if(dist<=radius)
+            {
+              if($('grow').checked || $('shrink').checked)
+              {
+                var push=Math.sin(dist/(radius) * Math.PI); //this is how far to "push" the current pixel.
+                if(push<0) push=0;
+                if(push*amount/10>dist) push=0;
+          
+                var cx=(dist-push*amount*radius/500)*Math.cos(angle); //coords of pixel in current image
+                var cy=(dist-push*amount*radius/500)*Math.sin(angle); //to get the color from. (appx)
+                
+                if(x < 0)
+                {
+                  cx=-cx;
+                  cy=-cy;
+                }
+              }
+              else if($('cw').checked || $('ccw').checked)
+              {
+                var push=Math.cos(dist/(radius) * Math.PI)/2+0.5;
+                if(push<0) push=0;
+                
+                var cx=dist*Math.cos(angle-push*amount/80);
+                var cy=dist*Math.sin(angle-push*amount/80);
+                if(x<0)
+                {
+                  cx=-cx;
+                  cy=-cy;
+                }
+              }
+              else if($('smear').checked)
+              {
+                var push=Math.cos(dist/(radius) * Math.PI/2);
+                var dx=mmx-mlx;
+                var dy=mmy-mly;
+                var dmax=3;
+                
+                if(dx>dmax)
+                {
+                  dy=dy/(dx/dmax);
+                  dx=dmax;
+                }
+                if(dy>dmax)
+                {
+                  dx=dx/(dy/dmax);
+                  dy=dmax;
+                }
+                
+                var cx=x-dx*push*(amount-20)/50;
+                var cy=y-dy*push*(amount-20)/50;
+              }
+            }
+            else
+            {
+              var cx=x;
+              var cy=y;
+            }
+          
+            //alert(push);
+            
+            var abort=false;
+            
+            if(cx<-distLeft) cx=-distLeft;
+            if(cx>width-distLeft) cx=width-distLeft;
+            if(cy<-distUp) cy=-distUp;
+            if(cy>height-distUp) cy=height-distUp;
+          
+            var cxf=Math.floor(cx);
+            var cyf=Math.floor(cy);
+          
+            var i00=i(cxf,cyf);
+            var i01=i(Math.ceil(cx),Math.ceil(cy));
+            var factor=Math.sqrt((Math.pow(cx-cxf,2) + Math.pow(cy-cyf,2))/2); //distance between actual and floor divided by sqrt2.
+            var i1=i(x,y,1);
+            if(x<-radius || x>=radius || y<-radius || y>=radius)
+            {
+              //alert('current!');
+            }
+          
+            if(!curImageData.data[i00+3])
+            {
+              //$('debug').innerHTML+="(x,y)=("+x+","+y+"); (cx,cy)=("+cx+","+cy+"); i00="+i00+"; curImageData.data[i00+3]="+curImageData.data[i00+3]+"<br>";
+            }
+          
+            newImageData.data[i1]=curImageData.data[i00]*(1-factor) + curImageData.data[i01]*factor;     //setting the color of the new coords to be equal to the color
+            newImageData.data[i1+1]=curImageData.data[i00+1]*(1-factor) + curImageData.data[i01+1]*factor; //of the current pixel.
+            newImageData.data[i1+2]=curImageData.data[i00+2]*(1-factor) + curImageData.data[i01+2]*factor;
+            newImageData.data[i1+3]=curImageData.data[i00+3]*(1-factor) + curImageData.data[i01+3]*factor;
+          }
+        }
+      
+        imgCtx.putImageData(newImageData,mmx-distLeft,mmy-distUp);
+        
+        if(mouseIsDown)
+        {
+          setTimeout("realDistort();",40);
+        }
+        else
+        {
+          imgCanvas.style.cursor='default';
+        }
+      }
+      else
+      {
+        imgCanvas.style.cursor='default';
+      }
+    }
+    
+    //this function returns a data index for the red component of the pixel at a given x and y, given
+    //the very specific circumstances I'm using in distort().
+    function i(x,y)
+    {
+      return ((y+distUp)*width*4) + ((x+distLeft)*4);
+    }
+  
+    function $(id)
+    {
+      return document.getElementById(id);
+    }
+    
+    //this function is called when the user clicks "load". It downloads the image and calls readImage().
+    function loadImage(u)
+    {
+      var cont=true;
+      
+      if(edited) cont=confirm("Discard current image and load new one?");
+      
+      if(cont)
+      {
+        img=new Image();
+        img.onload=function()
+        {
+          imgCtx.clearRect(0,0,w,h);
+          if(img.width>=img.height*w/h && img.width>w)
+          {
+            //toooooo wide.
+            drawAnImage(0,0,w,w*(img.height/img.width));
+          }
+          else if(img.width<img.height*w/h && img.height>h)
+          {
+            //toooooo tall.
+            drawAnImage(0,0,h*(img.width/img.height),h);
+          }
+          else
+          {
+            //it fits!
+            drawAnImage(0,0);
+          }
+        }
+        //status.innerHTML='Downloading&nbsp;image...';
+        img.src=u;
+        edited=false;
+      }
+    }
+    
+    function drawAnImage(x,y,w,h)
+    {
+      try
+      {
+        if(w===undefined)
+        {
+          imgCtx.drawImage(img,x,y);
+        }
+        else
+        {
+          imgCtx.drawImage(img,x,y,w,h);
+        }
+      }
+      catch(err)
+      {
+        if(w===undefined)
+        {
+          setTimeout("drawAnImage("+x+","+y+");",10);
+        }
+        else
+        {
+          setTimeout("drawAnImage("+x+","+y+","+w+","+h+");",10);
+        }
+      }
+    }
+	
+	//loadImage('images/bush.jpg');
+  </script>
+</body>
+
+</html>
